@@ -18,5 +18,5 @@ resource "local_file" "EnviromentDefinition" {
   workers-id = aws_instance.worker.*.id
  }
  )
- filename = "../ansible/.envrc"
+ filename = "../../ansible/.envrc"
 }

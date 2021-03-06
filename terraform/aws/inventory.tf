@@ -16,5 +16,5 @@ resource "local_file" "AnsibleInventory" {
   workers-id = aws_instance.worker.*.id
  }
  )
- filename = "../ansible/inventory"
+ filename = "../../ansible/inventory"
 }
