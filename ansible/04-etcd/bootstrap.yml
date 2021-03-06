@@ -1,0 +1,25 @@
+---
+- name: Setup ETCD cluster
+  hosts: masters
+
+  vars:
+        
+    - ansible_ssh_user: "ubuntu"
+    - ansible_ssh_common_args: >
+          -o ProxyCommand="ssh -W %h:%p -q {{ ansible_ssh_user }}@{{ lookup('env', 'B_HOST') }}" \
+          -o ServerAliveInterval=5 \
+          -o StrictHostKeyChecking=no
+    
+  roles:
+
+    - name: database/etcd
+      vars:
+        # Defined by directory (look for individual server certificates)
+        # etcd_server_dir: /Users/jakoberpf/Projects/ACloudGuru/kubernetes-the-hard-way/terraform-aws/ansible/01-certificates/controller.
+        # Defined by file (look for a single server certificate)
+        etcd_server: /Users/jakoberpf/Projects/ACloudGuru/kubernetes-the-hard-way/terraform-aws/ansible/01-certificates/kubernetes
+
+        etcd_ca: /Users/jakoberpf/Projects/ACloudGuru/kubernetes-the-hard-way/terraform-aws/ansible/01-certificates/ca
+
+        etcd_interface: eth0
+        etcd_token: CyKVHib03DR7OHwWgfhLd+gQ8+vq2T/+NZyzy2u8eG4ZEC5tQ6pngB2Z/XsU1k+a

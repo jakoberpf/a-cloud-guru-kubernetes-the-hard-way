@@ -1,0 +1,87 @@
+---
+- name: Setup worker nodes
+  hosts: workers
+
+  vars:
+        
+    - ansible_ssh_user: "ubuntu"
+    - ansible_ssh_common_args: >
+          -o ProxyCommand="ssh -W %h:%p -q {{ ansible_ssh_user }}@{{ lookup('env', 'B_HOST') }}" \
+          -o ServerAliveInterval=5 \
+          -o StrictHostKeyChecking=no
+
+    - cidr: 10.0.21.80/24
+    
+  tasks:
+
+    # - name: Create network bridge
+    #   become: true
+    #   shell: |
+    #     cat <<EOF | sudo tee /etc/cni/net.d/10-bridge.conf
+    #     {
+    #         "cniVersion": "0.3.1",
+    #         "name": "bridge",
+    #         "type": "bridge",
+    #         "bridge": "cnio0",
+    #         "isGateway": true,
+    #         "ipMasq": true,
+    #         "ipam": {
+    #             "type": "host-local",
+    #             "ranges": [
+    #               [{"subnet": "{{ ansible_host }}/24"}]
+    #             ],
+    #             "routes": [{"dst": "0.0.0.0/0"}]
+    #         }
+    #     }
+    #     EOF
+
+    # - name: Create network loopback interface
+    #   become: true
+    #   shell: |
+    #     cat <<EOF | sudo tee /etc/cni/net.d/99-loopback.conf
+    #     {
+    #         "cniVersion": "0.3.1",
+    #         "name": "lo",
+    #         "type": "loopback"
+    #     }
+    #     EOF
+
+    # Create routes for each subnet eg. 10.200.X.0/24 to next jump eg. 10.240.X.20
+
+    - name: Enable IP forwarding (instantly)
+      become: true
+      shell: sysctl net.ipv4.conf.all.forwarding=1
+
+    - name: Enable IP forwarding (permantly)
+      become: true
+      shell: echo "net.ipv4.conf.all.forwarding=1" | tee -a /etc/sysctl.conf
+
+    # - name: Copy certificates for the masters
+    #   become: yes
+    #   copy:
+    #     src: "../01-certificates/{{ item }}"
+    #     dest: "{{ item }}"
+    #   with_items:
+    #     - ca.pem
+    #     - kubernetes.pem 
+    #     - kubernetes-key.pem 
+
+- name: Setup worker nodes
+  hosts: localhost
+
+  tasks:
+
+    # - name: Create calico config from template
+    #   template:
+    #     src: calico.yaml.j2
+    #     dest: calico.yaml
+
+    - name: Apply calcio
+      shell: kubectl apply -f calico.yaml
+
+    - name: Apply fix for kubectl exec, logs and port-forward
+      shell: kubectl apply -f proxy-fix.yaml --namespace=kube-system
+
+    - name: Apply coredns
+      shell: |
+        helm repo add coredns https://coredns.github.io/helm && helm install coredns --namespace=kube-system ./coredns/stable/coredns/

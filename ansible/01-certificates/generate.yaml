@@ -1,0 +1,24 @@
+---
+- name: Prepare certificates
+  hosts: localhost
+
+  vars:
+        
+    - certificates_gen_force: false
+  
+  tasks:
+
+    - name: Check if the certificate authority exists
+      run_once: true
+      local_action: stat path=ca.pem
+      register: ca_result
+            
+    - name: Generate new certificates if necessary
+      run_once: true
+      local_action: command sh generate.sh
+      when: not ca_result.stat.exists
+
+    - name: Generate new certificates because forced
+      run_once: true
+      local_action: command sh generate.sh
+      when: certificates_gen_force

@@ -1,0 +1,47 @@
+---
+  
+  ## MASTER ##
+- name: Distribute kube configs for masters
+  hosts: masters
+
+  vars:
+        
+    - ansible_ssh_user: "ubuntu"
+    - ansible_ssh_common_args: >
+          -o ProxyCommand="ssh -W %h:%p -q {{ ansible_ssh_user }}@{{ lookup('env', 'B_HOST') }}" \
+          -o ServerAliveInterval=5 \
+          -o StrictHostKeyChecking=no
+          
+  tasks:
+
+    - name: Copy kube configs for the masters
+      become: yes
+      copy:
+        src: "{{ item }}"
+        dest: "{{ item }}"
+      with_items:
+        - admin.kubeconfig 
+        - kube-controller-manager.kubeconfig 
+        - kube-scheduler.kubeconfig
+
+  ## WORKER ##
+- name: Distribute kube configs for workers
+  hosts: workers
+
+  vars:
+        
+    - ansible_ssh_user: "ubuntu"
+    - ansible_ssh_common_args: >
+          -o ProxyCommand="ssh -W %h:%p -q {{ ansible_ssh_user }}@{{ lookup('env', 'B_HOST') }}" \
+          -o ServerAliveInterval=5 \
+          -o StrictHostKeyChecking=no
+          
+  tasks:
+    - name: Copy kube configs for the workers
+      become: yes
+      copy:
+        src: "{{ item }}"
+        dest: "{{ item }}"
+      with_items:
+        - "worker.{{ inventory_hostname }}.kubeconfig"
+        - kube-proxy.kubeconfig      

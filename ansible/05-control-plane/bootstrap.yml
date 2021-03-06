@@ -1,0 +1,334 @@
+---
+  ## Controll Plane ##
+- name: Setup kubernetes control plane
+  hosts: masters
+    
+  vars: 
+
+    - ansible_ssh_user: "ubuntu"
+    - ansible_ssh_common_args: >
+          -o ProxyCommand="ssh -W %h:%p -q {{ ansible_ssh_user }}@{{ lookup('env', 'B_HOST') }}" \
+          -o ServerAliveInterval=5 \
+          -o StrictHostKeyChecking=no
+
+    - etcd_interface: eth0
+    - kube_interface: eth0
+
+  tasks:
+
+    - name: Download kube-apiserver
+      become: yes
+      get_url:
+        url: https://storage.googleapis.com/kubernetes-release/release/v1.18.6/bin/linux/amd64/kube-apiserver
+        dest: /usr/local/bin/kube-apiserver
+        mode: 0755
+
+    - name: Download kube-controller-manager
+      become: yes
+      get_url:
+        url: https://storage.googleapis.com/kubernetes-release/release/v1.18.6/bin/linux/amd64/kube-controller-manager
+        dest: /usr/local/bin/kube-controller-manager
+        mode: 0755
+
+    - name: Download kube-scheduler
+      become: yes
+      get_url:
+        url: https://storage.googleapis.com/kubernetes-release/release/v1.18.6/bin/linux/amd64/kube-scheduler
+        dest: /usr/local/bin/kube-scheduler
+        mode: 0755
+
+    - name: Download kubectl
+      become: yes
+      get_url:
+        url: https://storage.googleapis.com/kubernetes-release/release/v1.18.6/bin/linux/amd64/kubectl
+        dest: /usr/local/bin/kubectl
+        mode: 0755
+
+    - name: Creates directory
+      become: yes
+      file:
+        path: /var/lib/kubernetes/
+        state: directory
+
+    - name: Copy certificates authority
+      become: yes
+      copy:
+        src: "../01-certificates/{{ item }}"
+        dest: "/var/lib/kubernetes/{{ item }}"
+      with_items:
+        - ca.pem 
+        - ca-key.pem 
+        - kubernetes-key.pem 
+        - kubernetes.pem 
+        - service-account-key.pem 
+        - service-account.pem 
+
+    - name: Copy certificates authority
+      become: yes
+      copy:
+        src: "../03-encryption-config/{{ item }}"
+        dest: "/var/lib/kubernetes/{{ item }}"
+      with_items:
+        - encryption-config.yaml
+
+    - name: Create kube api server service from template
+      become: yes
+      template:
+        src: kube-apiserver.service.j2
+        dest: /etc/systemd/system/kube-apiserver.service
+
+    - name: Copy kube controller manager config
+      become: yes
+      copy:
+        src: "../02-kube-configs/{{ item }}"
+        dest: "/var/lib/kubernetes/{{ item }}"
+      with_items:
+        - kube-controller-manager.kubeconfig
+
+    - name: Create kube controller manager service from template
+      become: yes
+      template:
+        src: kube-controller-manager.service.j2
+        dest: /etc/systemd/system/kube-controller-manager.service
+
+    - name: Copy kube scheduler config
+      become: yes
+      copy:
+        src: "../02-kube-configs/{{ item }}"
+        dest: "/var/lib/kubernetes/{{ item }}"
+      with_items:
+        - kube-scheduler.kubeconfig
+
+    - name: Creates directory
+      become: yes
+      file:
+        path: /etc/kubernetes/config
+        state: directory
+
+    - name: Create kube scheduler config from template
+      become: yes
+      template:
+        src: kube-scheduler.yaml.j2
+        dest: /etc/kubernetes/config/kube-scheduler.yaml
+
+    - name: Create kube scheduler service from template
+      become: yes
+      template:
+        src: kube-scheduler.service.j2
+        dest: /etc/systemd/system/kube-scheduler.service
+
+    - name: Reload daemon_reload
+      become: true
+      systemd:
+        daemon_reload: yes
+
+    - name: Enable services
+      become: true
+      service:
+        name: "{{ item }}"
+        enabled: true
+        daemon_reload: yes
+      with_items:
+        - kube-apiserver 
+        - kube-controller-manager 
+        - kube-scheduler
+
+    - name: Start services
+      become: true
+      service:
+        name: "{{ item }}"
+        state: started
+      with_items:
+        - kube-apiserver 
+        - kube-controller-manager 
+        - kube-scheduler
+
+    - name: Run "kubectl get componentstatus" and register the results
+      shell: |
+        kubectl get componentstatuses --kubeconfig admin.kubeconfig
+      register: componentstatuses
+
+    - name: Output the registered results of "kubectl get componentstatus"
+      debug: var=componentstatuses.stdout_lines
+
+    - name: Install nginx
+      become: true
+      apt: 
+        name: nginx 
+        state: present
+
+    - name: Create nginx config from template
+      become: yes
+      template:
+        src: kubernetes.default.svc.cluster.local.j2
+        dest: /etc/nginx/sites-available/kubernetes.default.svc.cluster.local
+
+    - name: Create symbolic link 
+      become: yes
+      file:
+        src: /etc/nginx/sites-available/kubernetes.default.svc.cluster.local
+        dest: /etc/nginx/sites-enabled/kubernetes.default.svc.cluster.local
+        state: link
+
+    - name: Restart nginx
+      become: true
+      service:
+        name: "{{ item }}"
+        state: restarted
+      with_items:
+        - nginx
+
+    - name: Check http api health and register the results
+      shell: |
+        curl -H "Host: kubernetes.default.svc.cluster.local" -i http://127.0.0.1/healthz
+      register: health
+
+    - name: Output the registered results of "kubectl get componentstatus"
+      debug: var=health.stdout_lines
+
+    - name: Set up RBAC for kubelet authorization [1] ClusterRole
+      run_once: true
+      shell: |
+        cat << EOF | kubectl apply --kubeconfig admin.kubeconfig -f -
+        apiVersion: rbac.authorization.k8s.io/v1beta1
+        kind: ClusterRole
+        metadata:
+          annotations:
+            rbac.authorization.kubernetes.io/autoupdate: "true"
+          labels:
+            kubernetes.io/bootstrapping: rbac-defaults
+          name: system:kube-apiserver-to-kubelet
+        rules:
+          - apiGroups:
+              - ""
+            resources:
+              - nodes/proxy
+              - nodes/stats
+              - nodes/log
+              - nodes/spec
+              - nodes/metrics
+            verbs:
+              - "*"
+        EOF
+      register: clusterrole
+
+    - name: Output the registered results of "ClusterRole"
+      run_once: true
+      debug: var=clusterrole.stdout_lines
+
+    - name: Set up RBAC for kubelet authorization [2] ClusterRoleBinding
+      run_once: true
+      shell: |
+        cat << EOF | kubectl apply --kubeconfig admin.kubeconfig -f -
+        apiVersion: rbac.authorization.k8s.io/v1beta1
+        kind: ClusterRoleBinding
+        metadata:
+          name: system:kube-apiserver
+          namespace: ""
+        roleRef:
+          apiGroup: rbac.authorization.k8s.io
+          kind: ClusterRole
+          name: system:kube-apiserver-to-kubelet
+        subjects:
+          - apiGroup: rbac.authorization.k8s.io
+            kind: User
+            name: kubernetes
+        EOF
+      register: clusterrolebinding
+
+    - name: Output the registered results of "ClusterRoleBinding"
+      run_once: true
+      debug: var=clusterrolebinding.stdout_lines
+
+  ## Loadbalancer ##
+- name: Setup loadbalancer
+  hosts: loadbalancer
+    
+  vars: 
+
+    - ansible_ssh_user: "ubuntu"
+    - ansible_ssh_common_args: >
+          -o ProxyCommand="ssh -W %h:%p -q {{ ansible_ssh_user }}@{{ lookup('env', 'B_HOST') }}" \
+          -o ServerAliveInterval=5 \
+          -o StrictHostKeyChecking=no
+
+  tasks:
+
+    - name: Install nginx
+      become: true
+      apt: 
+        name: nginx 
+        state: present
+
+    - name: Creates directory
+      become: yes
+      file:
+        path: /etc/nginx/tcpconf.d
+        state: directory
+
+    - name: Add the tcpconf.d to the nginx.conf
+      become: yes
+      ansible.builtin.lineinfile:
+        path: /etc/nginx/nginx.conf
+        line: include /etc/nginx/tcpconf.d/*;
+        create: yes
+
+    # - name: Create nginx config from template
+    #   become: yes
+    #   template:
+    #     src: kubernetes.default.svc.cluster.local.j2
+    #     dest: /etc/nginx/sites-available/kubernetes.local
+
+    # - name: Create symbolic link 
+    #   become: yes
+    #   file:
+    #     src: /etc/nginx/sites-available/kubernetes.default.svc.cluster.local
+    #     dest: /etc/nginx/sites-enabled/kubernetes.default.svc.cluster.local
+    #     state: link
+
+    - name: Configure load balancing
+      become: yes
+      shell: |
+        cat << EOF | sudo tee /etc/nginx/tcpconf.d/kubernetes.conf
+        stream {
+            upstream kubernetes {
+                server {{ lookup('env', 'MASTER0_INT_IP') }}:6443;
+                server {{ lookup('env', 'MASTER1_INT_IP') }}:6443;
+                server {{ lookup('env', 'MASTER2_INT_IP') }}:6443;
+            }
+
+            server {
+                listen 6443;
+                listen 443;
+                proxy_pass kubernetes;
+            }
+
+            # upstream etcd {
+            #     server {{ lookup('env', 'MASTER0_INT_IP') }}:2379;
+            #     server {{ lookup('env', 'MASTER1_INT_IP') }}:2379;
+            #     server {{ lookup('env', 'MASTER2_INT_IP') }}:2379;
+            # }
+
+            # server {
+            #     listen 2379;
+            #     proxy_pass etcd;
+            # }
+        }
+        EOF
+
+    - name: Restart nginx
+      become: true
+      service:
+        name: "{{ item }}"
+        state: restarted
+        enabled: yes
+      with_items:
+        - nginx
+
+    - name: Check http api health and register the results
+      shell: |
+        curl -k https://localhost:6443/version
+      register: health
+
+    - name: Output the registered results of "kubectl get componentstatus"
+      debug: var=health.stdout_lines

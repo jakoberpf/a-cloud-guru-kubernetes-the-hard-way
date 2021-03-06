@@ -1,0 +1,46 @@
+---
+- name: Setup a kubernetes cluster the hard way
+  hosts: loadbalancer:masters:workers
+
+  vars:
+
+    - ansible_ssh_user: "ubuntu"
+    - ansible_ssh_common_args: >
+          -o ProxyCommand="ssh -W %h:%p -q {{ ansible_ssh_user }}@{{ lookup('env', 'B_HOST') }}" \
+          -o ServerAliveInterval=5 \
+          -o StrictHostKeyChecking=no
+  
+  tasks:
+    - name: Verify SSH access to all hosts
+      debug:
+        msg: Hello World from {{ inventory_hostname }}!
+
+- name: Generate new certificates if necessary or forced
+  import_playbook: 01-certificates/generate.yaml
+
+- name: Distribute certificates if necessary or forced
+  import_playbook: 01-certificates/distribute.yaml
+
+- name: Generate new kubeconfigs if necessary or forced
+  import_playbook: 02-kube-configs/generate.yaml
+
+- name: Distribute kubeconfigs if necessary or forced
+  import_playbook: 02-kube-configs/distribute.yaml
+
+- name: Generate new encryption config if necessary or forced
+  import_playbook: 03-encryption-config/generate.yaml
+
+- name: Distribute encryption config if necessary or forced
+  import_playbook: 03-encryption-config/distribute.yaml
+
+- name: Boostrap ECDT cluster
+  import_playbook: 04-etcd/bootstrap.yml
+
+- name: Boostrap control plane
+  import_playbook: 05-control-plane/bootstrap.yml
+
+- name: Boostrap worker
+  import_playbook: 06-worker/bootstrap.yml
+
+- name: Setup networking
+  import_playbook: 07-networking/bootstrap.yml

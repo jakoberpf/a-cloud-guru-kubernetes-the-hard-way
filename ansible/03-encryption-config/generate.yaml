@@ -1,0 +1,24 @@
+---
+- name: Prepare encryption config
+  hosts: localhost
+
+  vars:
+        
+    - encryption_gen_force: false
+  
+  tasks:
+
+    - name: Check if the encryption config exists
+      run_once: true
+      local_action: stat path=encryption-config.yaml
+      register: encryption_result
+            
+    - name: Generate new encryption config if necessary
+      run_once: true
+      local_action: command sh generate.sh
+      when: not encryption_result.stat.exists
+
+    - name: Generate new encryption config because forced
+      run_once: true
+      local_action: command sh generate.sh
+      when: encryption_gen_force

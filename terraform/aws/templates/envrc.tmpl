@@ -1,0 +1,23 @@
+export KUBECONFIG=$PWD/02-kube-configs/remote.kubeconfig
+
+# Bastion Node '${bastion-id}'
+export B_INT_IP="${bastion-ip-private}"
+export B_PUB_IP="${bastion-ip-public}"
+export B_HOST="${bastion-dns}"
+
+# Loadbalancer Node '${loadbalancer-id}'
+export LB_INT_IP="${loadbalancer-ip-private}"
+export LB_PUB_IP="${loadbalancer-ip-public}"
+export LB_HOST="${loadbalancer-dns}"
+
+# Master Nodes
+%{ for index, dns in masters-dns ~}
+export MASTER${index}_INT_IP="${masters-ip[index]}" # ${masters-id[index]}
+export MASTER${index}_HOST="${dns}"
+%{ endfor ~}
+
+# Worker Nodes
+%{ for index, dns in workers-dns ~}
+export WORKER${index}_INT_IP="${workers-ip[index]}" # ${workers-id[index]}
+export WORKER${index}_HOST="${dns}"
+%{ endfor ~}

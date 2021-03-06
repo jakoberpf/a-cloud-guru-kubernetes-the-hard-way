@@ -1,0 +1,15 @@
+[bastion]
+ec2-34-197-207-124.compute-1.amazonaws.com ansible_host=34.197.207.124 # i-0abcecd1f74e2815c
+
+[loadbalancer]
+ip-10-0-11-246.ec2.internal ansible_host=10.0.11.246 # i-0c4f97dd0e0da04c7
+
+[masters]
+ip-10-0-21-164.ec2.internal ansible_host=10.0.21.164 # i-09686435164a60f52
+ip-10-0-21-17.ec2.internal ansible_host=10.0.21.17 # i-01f336327d45eed94
+ip-10-0-21-163.ec2.internal ansible_host=10.0.21.163 # i-04a9f951f240c190c
+
+[workers]
+ip-10-0-21-210.ec2.internal ansible_host=10.0.21.210 # i-09b6c535f44b8fe4b
+ip-10-0-21-161.ec2.internal ansible_host=10.0.21.161 # i-0690413d875f83f48
+ip-10-0-21-15.ec2.internal ansible_host=10.0.21.15 # i-0221de394391bb7ec

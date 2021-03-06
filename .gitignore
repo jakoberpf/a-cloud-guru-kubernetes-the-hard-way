@@ -1,0 +1,20 @@
+*.pem
+*.csr
+ansible/01-certificates/*.json
+ansible/02-kube-configs/*.kubeconfig
+ansible/03-encryption-config/encryption-config.yaml
+# Terraform AWS
+terraform/aws/.envrc
+terraform/aws/.terraform
+terraform/aws/.terraform.lock.hcl
+terraform/aws/terraform.tfstate
+terraform/aws/terraform.tfstate.backup
+terraform/aws/.terraform.tfstate.lock.info
+terraform/aws/-certificates/*.json
+terraform/aws/-kube-configs/*.kubeconfig
+terraform/aws/-encryption-config/encryption-config.yaml
+# Terraform GoogleCloud
+
+# Terraform Azure
+
+

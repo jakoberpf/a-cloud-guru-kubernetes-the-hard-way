@@ -1,0 +1,13 @@
+---
+- name: Prepare kube configs
+  hosts: localhost
+
+  vars:
+        
+    - kube_configs_gen_force: false
+  
+  tasks:
+            
+    - name: Generate kube configs
+      run_once: true
+      local_action: command sh generate.sh
